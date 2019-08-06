@@ -8,9 +8,10 @@ import requests
 from selenium import webdriver
 
 def make_executable(path):
-    mode = os.stat(path).st_mode
-    mode |= (mode & 0o444) >> 2    # copy R bits to X
-    os.chmod(path, mode)
+    if platform.system() != 'win32':
+        mode = os.stat(path).st_mode
+        mode |= (mode & 0o444) >> 2 # copy R bits to X
+        os.chmod(path, mode)
 
 def update_chromedriver(version=''):
     if not version:
