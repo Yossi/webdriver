@@ -1,0 +1,5 @@
+chromedriver
+.vscode/
+__pycache__/
+profile/
+venv/
