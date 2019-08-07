@@ -3,3 +3,5 @@ chromedriver
 __pycache__/
 profile/
 venv/
+dist/
+webdriver.egg-info/
