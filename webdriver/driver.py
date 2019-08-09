@@ -9,7 +9,7 @@ from selenium import webdriver
 from selenium.common.exceptions import SessionNotCreatedException
 
 def make_executable(path):
-    if platform.system() != 'win32':
+    if platform.system() != 'Windows':
         mode = os.stat(path).st_mode
         mode |= (mode & 0o444) >> 2 # copy R bits to X
         os.chmod(path, mode)
