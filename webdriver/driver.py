@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 import platform
 from zipfile import ZipFile
@@ -7,6 +8,18 @@ from time import sleep
 import requests
 from selenium import webdriver
 from selenium.common.exceptions import SessionNotCreatedException
+
+def get_chrome_version():
+    version_commands = {
+        'Linux': 'google-chrome --version',
+        'Darwin': r'/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version',
+        'Windows': r'reg query "HKEY_CURRENT_USER\Software\Google\Chrome\BLBeacon" /v version'
+    }
+
+    version = re.search(r'\d+\.\d+\.\d+', os.popen(version_commands[platform.system()]).read())
+    if not version:
+        raise ValueError('Could not find Chrome version')
+    return version.group(0)
 
 def make_executable(path):
     if platform.system() != 'Windows':
@@ -20,7 +33,7 @@ def update_chromedriver(version=''):
     arch = {'Linux': 'linux64', 'Darwin': 'mac64', 'Windows': 'win32'}[platform.system()] # these are the only options available
     logging.info('%s detected', arch)
     url = 'https://chromedriver.storage.googleapis.com/{}/chromedriver_{}.zip'.format(version, arch)
-    logging.info('downloading...')
+    logging.info(f'downloading chromedriver {version} ...')
     zip_file = ZipFile(BytesIO(requests.get(url).content))
     for name in zip_file.namelist():
         if name.startswith('chromedriver'):
@@ -40,23 +53,25 @@ def get_driver(headless=False):
 
     # assume chrome is installed. anything else is out of scope
     # http://chromedriver.chromium.org/downloads/version-selection
+    chrome_version = get_chrome_version() #1
+    version_check_url = 'https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{}'.format(chrome_version) #2
+    matching_CD_version = requests.get(version_check_url).text.strip() #3
+
     if not (os.path.isfile('chromedriver') or os.path.isfile('chromedriver.exe')): # bootstrap self
         logging.info('chromedriver not found')
-        update_chromedriver() # just get newest, dont worry about automatically matching chrome yet
+        update_chromedriver(matching_CD_version) #4
         make_executable('./chromedriver')
 
     try:
         driver = webdriver.Chrome('./chromedriver', chrome_options=options) # assumes our version of chromedriver works with our version of chrome
-        chrome_version = driver.capabilities[({'version', 'browserVersion'} & driver.capabilities.keys()).pop()] #1
         CD_version = driver.capabilities['chrome']['chromedriverVersion'].split()[0]
-        version_check_url = 'https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{}'.format(chrome_version.rpartition('.')[0]) #2
-        matching_CD_version = requests.get(version_check_url).text.strip() #3
         if CD_version != matching_CD_version: #5
             driver.quit() # need to release the file lock
             logging.info('have chromedriver {}. attempting to update to {}'.format(CD_version, matching_CD_version))
             update_chromedriver(matching_CD_version) #4
             driver = webdriver.Chrome('./chromedriver', chrome_options=options) # reopen with fresh new chromedriver
     except SessionNotCreatedException:
+        # there is a built-in assumption here that chromedriver version wont ever get ahead of chrome
         update_chromedriver() # so far out of date that just grabbing the newest is the way to go
         driver = webdriver.Chrome('./chromedriver', chrome_options=options)
     return driver
@@ -71,7 +86,7 @@ def test():
         driver.implicitly_wait(5)
         driver.set_window_size(1024, 768)
         driver.get('https://www.github.com')
-        sleep(2)
+        sleep(1)
 
     finally:
         if driver:
