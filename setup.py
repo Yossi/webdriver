@@ -8,7 +8,7 @@ with open('requirements.txt', 'r') as f:
 
 setuptools.setup(
     name="webdriver",
-    version="0.0.1",
+    version="0.0.3",
     author="Yossi",
     description="webdriver factory",
     long_description=long_description,
