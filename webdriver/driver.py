@@ -46,7 +46,7 @@ def update_chromedriver(version=''):
 def get_driver(headless=False):
     options = webdriver.ChromeOptions()
     options.add_argument('log-level=3')
-    options.add_argument("user-data-dir=profile/")
+    # options.add_argument("user-data-dir=profile/") # removed due to bug in chromedriver 83
     if headless:
         options.add_argument('headless')
         options.add_argument('disable-gpu')
