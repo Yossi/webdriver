@@ -46,7 +46,7 @@ def update_chromedriver(version=''):
 def get_driver(headless=False):
     options = webdriver.ChromeOptions()
     options.add_argument('log-level=3')
-    # options.add_argument("user-data-dir=profile/") # removed due to bug in chromedriver 83
+    options.add_argument("user-data-dir=profile/")
     if headless:
         options.add_argument('headless')
         options.add_argument('disable-gpu')
@@ -88,10 +88,11 @@ def test():
     try:
         driver = None
         logging.info('get driver...')
-        driver = get_driver()
+        driver = get_driver(headless=True)
         driver.implicitly_wait(5)
-        driver.set_window_size(1024, 768)
-        driver.get('https://www.github.com')
+        #driver.set_window_size(1024, 768)
+        logging.info('waiting on get()')
+        driver.get('https://www.noip.com/login')
         sleep(1)
 
     finally:
