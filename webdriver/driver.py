@@ -9,6 +9,11 @@ import requests
 from selenium import webdriver
 from selenium.common.exceptions import SessionNotCreatedException
 
+import tarfile
+import tempfile
+from webdriver_manager.firefox import GeckoDriverManager
+
+
 def get_chrome_version():
     version_commands = {
         'Linux': 'google-chrome --version',
@@ -21,6 +26,19 @@ def get_chrome_version():
         raise ValueError('Could not find Chrome version')
     return version.group(0)
 
+def get_firefox_version():
+    ''' only been tested on linux '''
+    version_commands = {
+        'Linux': 'firefox --version',
+        #'Darwin': r'/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version',
+        'Windows': r'reg query "HKLM\SOFTWARE\Mozilla\Mozilla Firefox" /v CurrentVersion'
+    }
+
+    version = re.search(r'\d+\.\d+\.\d+', os.popen(version_commands[platform.system()]).read())
+    if not version:
+        raise ValueError('Could not find Firefox version')
+    return version.group(0)
+
 def make_executable(path):
     if platform.system() != 'Windows':
         mode = os.stat(path).st_mode
@@ -29,7 +47,7 @@ def make_executable(path):
 
 def update_chromedriver(version=''):
     if not version:
-        version = requests.get('https://chromedriver.storage.googleapis.com/LATEST_RELEASE').text.strip() # google claims this url is depricated but I wont fix this untill they break it
+        version = requests.get('https://chromedriver.storage.googleapis.com/LATEST_RELEASE').text.strip() # google claims this url is depricated but I wont fix this until they break it
     arch = {'Linux': 'linux64', 'Darwin': 'mac64', 'Windows': 'win32'}[platform.system()] # these are the only options available
     logging.info('%s detected', arch)
     url = 'https://chromedriver.storage.googleapis.com/{}/chromedriver_{}.zip'.format(version, arch)
@@ -43,7 +61,37 @@ def update_chromedriver(version=''):
             logging.info('ready')
             break
 
+def update_geckodriver(version=''):
+    if not version:
+        webpage = requests.get('https://firefox-source-docs.mozilla.org/_sources/testing/geckodriver/Support.md.txt').text
+        index = webpage.index('<td')
+        version = webpage[index+4:index+10]
+    arch = {'Linux': 'linux64.tar.gz', 'Darwin': 'macos.tar.gz', 'Windows': 'win64.zip'}[platform.system()]
+    logging.info('%s detected', arch)
+    url = 'https://github.com/mozilla/geckodriver/releases/download/v{}/geckodriver-v{}-{}'.format(version, version, arch)
+    logging.info(f'downloading geckodriver {version} ...')
+
+    if url.endswith('tar.gz'):
+        with tempfile.NamedTemporaryFile() as t:
+            t.write(requests.get(url).content)
+            tar = tarfile.open(t.name, 'r:*')
+            tar.extract('geckodriver')
+
+    if url.endswith('zip'):
+        zip_file = ZipFile(BytesIO(requests.get(url).content))
+        for name in zip_file.namelist():
+            if name.startswith('geckodriver'):
+                logging.info('unpacking...')
+                with open(name, 'wb') as out:
+                    out.write(zip_file.read(name))
+                logging.info('ready')
+                break
+
 def get_driver(headless=False):
+    ''' function here for backward compatibility '''
+    return get_chrome_driver(headless)
+
+def get_chrome_driver(headless=False):
     options = webdriver.ChromeOptions()
     options.add_argument('log-level=3')
     options.add_argument("user-data-dir=profile/")
@@ -83,17 +131,31 @@ def get_driver(headless=False):
     return driver
 
 
+def get_firefox_driver(headless=False):
+    if not os.path.exists('geckoprofile/'):
+        os.makedirs('geckoprofile/')
+    options = webdriver.FirefoxOptions()
+    options.add_argument('--profile')
+    options.add_argument('geckoprofile/')
+    if headless:
+        options.add_argument('--headless')
+
+    driver = webdriver.Firefox(service_args=["--marionette-port", "2828"], executable_path=GeckoDriverManager(log_level=0).install(), options=options)
+    return driver
+
+
 
 def test():
     try:
         driver = None
         logging.info('get driver...')
-        driver = get_driver(headless=True)
+        driver = get_firefox_driver(headless=True)
         driver.implicitly_wait(5)
         #driver.set_window_size(1024, 768)
         logging.info('waiting on get()')
         driver.get('https://www.noip.com/login')
         sleep(1)
+        logging.info('nothing crashed')
 
     finally:
         if driver:
@@ -105,3 +167,22 @@ if __name__ == '__main__':
                         format='%(asctime)s %(message)s',
                         datefmt='%H:%M:%S')
     test()
+    # print(GeckoDriverManager(log_level=0).install())
+
+
+
+
+    # # assume Firefox is installed. anything else is out of scope
+    # if not (os.path.isfile('geckodriver') or os.path.isfile('geckodriver.exe')): # bootstrap self
+    #     logging.info('geckodriver not found')
+    #     update_geckodriver()
+    #     # make_executable('./geckodriver')
+
+    # try:
+    #     service = webdriver.firefox.service.Service('geckodriver', port=2828)
+    #     driver = webdriver.Firefox(service=service, options=options) # assumes our version of geckodriver works with our version of firefox
+    # except SessionNotCreatedException:
+    #     # there is a built-in assumption here that geckodriver version wont ever get ahead of firefox
+    #     update_geckodriver() # so far out of date that just grabbing the newest is the way to go
+    #     driver = webdriver.Firefox('./geckodriver', options=options) #############################################################################################
+    # return driver
