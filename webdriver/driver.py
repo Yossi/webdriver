@@ -47,16 +47,16 @@ def make_executable(path):
 
 def update_chromedriver(version=''):
     if not version:
-        version = requests.get('https://chromedriver.storage.googleapis.com/LATEST_RELEASE').text.strip() # google claims this url is depricated but I wont fix this until they break it
+        version = requests.get('https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE').text.strip()
     arch = {'Linux': 'linux64', 'Darwin': 'mac64', 'Windows': 'win32'}[platform.system()] # these are the only options available
     logging.info('%s detected', arch)
-    url = 'https://chromedriver.storage.googleapis.com/{}/chromedriver_{}.zip'.format(version, arch)
+    url = 'https://storage.googleapis.com/chrome-for-testing-public/{}/linux64/chromedriver-{}.zip'.format(version, arch)
     logging.info(f'downloading chromedriver {version} ...')
     zip_file = ZipFile(BytesIO(requests.get(url).content))
     for name in zip_file.namelist():
-        if name.startswith('chromedriver'):
+        if name.startswith(f'chromedriver-{arch}/chromedriver'):
             logging.info('unpacking...')
-            with open(name, 'wb') as out:
+            with open(os.path.basename(name), 'wb') as out:
                 out.write(zip_file.read(name))
             logging.info('ready')
             break
@@ -94,7 +94,7 @@ def get_driver(headless=False):
 def get_chrome_driver(headless=False):
     options = webdriver.ChromeOptions()
     options.add_argument('log-level=3')
-    options.add_argument("user-data-dir=profile/")
+    options.add_argument('user-data-dir=profile/')
     if headless:
         options.add_argument('headless')
         options.add_argument('disable-gpu')
@@ -108,7 +108,7 @@ def get_chrome_driver(headless=False):
     # assume chrome is installed. anything else is out of scope
     # http://chromedriver.chromium.org/downloads/version-selection
     chrome_version = get_chrome_version() #1
-    version_check_url = 'https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{}'.format(chrome_version) #2
+    version_check_url = 'https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{}'.format(chrome_version) #2
     matching_CD_version = requests.get(version_check_url).text.strip() #3
 
     if not (os.path.isfile('chromedriver') or os.path.isfile('chromedriver.exe')): # bootstrap self
@@ -116,18 +116,20 @@ def get_chrome_driver(headless=False):
         update_chromedriver(matching_CD_version) #4
         make_executable('./chromedriver')
 
+    service = webdriver.ChromeService('./chromedriver')
+
     try:
-        driver = webdriver.Chrome('./chromedriver', chrome_options=options) # assumes our version of chromedriver works with our version of chrome
+        driver = webdriver.Chrome(service=service, options=options) # assumes our version of chromedriver works with our version of chrome
         CD_version = driver.capabilities['chrome']['chromedriverVersion'].split()[0]
         if CD_version != matching_CD_version: #5
             driver.quit() # need to release the file lock
             logging.info('have chromedriver {}. attempting to update to {}'.format(CD_version, matching_CD_version))
             update_chromedriver(matching_CD_version) #4
-            driver = webdriver.Chrome('./chromedriver', chrome_options=options) # reopen with fresh new chromedriver
+            driver = webdriver.Chrome(service=service, options=options) # reopen with fresh new chromedriver
     except SessionNotCreatedException:
         # there is a built-in assumption here that chromedriver version wont ever get ahead of chrome
         update_chromedriver() # so far out of date that just grabbing the newest is the way to go
-        driver = webdriver.Chrome('./chromedriver', chrome_options=options)
+        driver = webdriver.Chrome(service=service, options=options)
     return driver
 
 
@@ -166,7 +168,11 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(message)s',
                         datefmt='%H:%M:%S')
-    test()
+    get_driver().get('https://selenium.dev')
+    
+    
+    
+    # test()
     # print(GeckoDriverManager(log_level=0).install())
 
 
